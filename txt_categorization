@@ -26,6 +26,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 import plotly
+import yake
 import plotly.graph_objs as go
 import io
 
@@ -350,9 +351,28 @@ def tsne_plot():
     plt.show()
     print("done1")
     
+def extract_keywords():
+    kw_extractor = yake.KeywordExtractor()
+    doc_num = 0
+    for doc in df['abstract'].tolist():
+      print ("abstract_text :",doc)
+      doc_num= doc_num+1
+      text = doc
+      language = "en"
+      max_ngram_size = 3
+      deduplication_threshold = 0.9
+      numOfKeywords = 5
+      custom_kw_extractor = yake.KeywordExtractor(lan=language, n=max_ngram_size, dedupLim=deduplication_threshold, top=numOfKeywords, features=None)
+      keywords = custom_kw_extractor.extract_keywords(text)
+      print("keywords for Doc", doc_num)
+
+  for kw in keywords:
+    print(kw)
+    
 
 store_retrieved_articles(query_1)
 store_duplication('Articles_info')
 document_similarty(query_1,'Articles_info',abstract = True, title = True )
 load_glove()
 tsne_plot()
+extract_keywords()
