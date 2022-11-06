@@ -1,0 +1,236 @@
+import nltk
+
+import pandas as pd
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize,sent_tokenize
+from nltk.stem.snowball import SnowballStemmer
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
+import json
+from pandas import json_normalize
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+import gensim
+from gensim import corpora , models, similarities
+from gensim.utils import simple_preprocess
+from gensim.models.fasttext import FastText
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import kendalltau
+from scipy import spatial
+import numpy as np
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+import plotly
+import plotly.graph_objs as go
+import io
+
+
+from pymed import PubMed
+
+
+
+pubmed = PubMed(tool="MyTool", email="my@email.address")
+
+query_1 = "summarization of medical documents"
+query_2 = "clinical summarization of documents"
+query_3 = "hospital disease of documents clinical articles medical covid"
+
+doc_list = [ query_1, query_2, query_3 ]
+
+stop_words = set(stopwords.words('english'))
+ps = SnowballStemmer("english")
+
+articleInfo = []
+
+def retriev_articles(query, max):
+    # Execute the query against the API
+    print(max)
+    results = pubmed.query(query, max_results=max)
+
+    #for i in results:
+    return results
+
+def tokenizer (txt):
+    clean_keyword = []
+    kw_levels = word_tokenize(txt)
+
+    for kw_level in kw_levels:
+        if kw_level not in stop_words:
+            clean_keyword.append(ps.stem(kw_level))
+
+    return clean_keyword
+
+
+def store_retrieved_articles(query):
+    # Loop over the retrieved articles
+    results = retriev_articles(query, 100)
+    articleList = []
+    abstract_line = ""
+    i =0
+    for article in results:
+        i=i+1
+        # Print the type of object we've found (can be either PubMedBookArticle or PubMedArticle)
+        #print(type(article))
+        # Print a JSON representation of the object
+        #print(article.toJSON())
+
+        articleDict = article.toDict()
+        articleList.append(articleDict)
+        #Sometimes article['pubmed_id'] contains list separated with comma - take first pubmedId in that list - thats article pubmedId
+        pubmedId = articleDict['pubmed_id'].partition('\n')[0]
+
+
+        if articleDict['abstract'] is not None:
+            abstract_line = articleDict['abstract']
+
+        clean_title = " ".join(tokenizer(articleDict['title']))
+
+        clean_abstract = " ".join(" ".join(tokenizer(abstract_line)))
+
+        # Append article info to dictionary
+        articleInfo.append({u'pubmed_id': articleDict['pubmed_id'],
+                            u'publication_date': articleDict['publication_date'],
+                            u'title': articleDict['title'],
+                            u'clean_title': clean_title,
+                            u'keywords': articleDict['keywords'],
+                            u'authors': articleDict['authors'],
+                            u'abstract': articleDict['abstract'],
+                            u'clean_abstract': clean_abstract})
+
+        df = pd.json_normalize(articleInfo)
+
+        df.to_csv('Articles_info.csv', index=False, sep=";")
+    print(i)
+
+#---------------Task 2 --------------------
+#output the size of the abstract in terms of number of tokens
+#1) check titles
+#2) check abstract
+def store_duplication(file_name):
+    origianl_title_1 = []
+    origianl_title_2 = []
+    Article_ID_1 = []
+    Article_ID_2 = []
+
+    score = []
+    abstract_score = []
+
+    data = pd.read_csv(file_name+".csv", sep=";")
+
+    for index,data_item in data.iterrows():
+        for index2, data_item2 in data.iterrows():
+
+            if data_item["clean_title"] != data_item2["clean_title"]:
+                score_item = fuzz.partial_ratio(data_item["clean_title"], data_item2["clean_title"])
+                if score_item >= 10:
+                    abstract_score_item = fuzz.partial_ratio(data_item["clean_abstract"], data_item2["clean_abstract"])
+
+                    if abstract_score_item >= 50 :
+                        score.append(score_item)
+                        abstract_score.append(abstract_score_item)
+
+                        origianl_title_1.append(data_item["title"])
+                        Article_ID_1.append(data_item["pubmed_id"])
+
+                        origianl_title_2.append(data_item2["title"])
+                        Article_ID_2.append(data_item2["pubmed_id"])
+
+    articles_dic = {"Article 1":origianl_title_1,"Article 2":origianl_title_2,
+                    "pubmed_id_1":Article_ID_1,"pubmed_id_2":Article_ID_2,"Score":score, "abstract_score":abstract_score}
+
+    articles_df = pd.DataFrame(articles_dic,columns=["Article 1","Article 2","Score","abstract_score","pubmed_id_1","pubmed_id_2"])
+    articles_df.to_csv("results.csv",index=False,sep=";")
+
+#---------------Task 3 --------------------
+"""
+tf-idf vectorizer
+term frequency–inverse document frequency, 
+is a numerical statistic that is intended to reflect how important a word is to a document in a collection or corpus.
+"""
+
+"""
+Use information retrieval like approach, 
+using tf-idf vectorizer in genism library to evaluate the similarity of each document to query (Q1 or Q2), 
+then check whether the ordering of the search API is consistent with similarity scores for both Q1 and Q2
+
+"""
+def Similarity (query,documents_list):
+    # Create the Dictionary and Corpus
+    words = []
+    mydict = corpora.Dictionary([simple_preprocess(line) for line in documents_list])
+
+    words = list(mydict.values())
+    corpus = [mydict.doc2bow(simple_preprocess(line)) for line in documents_list]
+
+    print("words", words)
+    feature_cnt = len(mydict.token2id)
+
+    #print(mydict.token2id)
+    #for doc in corpus:
+    #    print([[mydict[id], freq] for id, freq in doc])
+
+    # Create the TF-IDF model
+    tfidf = models.TfidfModel(corpus, smartirs='ntc')
+    # Show the TF-IDF weights
+    #for doc in tfidf[corpus]:
+    #    print([[mydict[id], np.around(freq, decimals=2)] for id, freq in doc])
+    print(documents_list)
+    xx = []
+    for i in documents_list:
+        #xx = []
+        clean_bb = word_tokenize(i)
+        xx.append(clean_bb)
+
+
+    clean_keyword = word_tokenize(query)
+    #clean_bb = word_tokenize(documents_list)
+
+    print ("clean ", clean_keyword)
+
+    query_vector = mydict.doc2bow(clean_keyword)
+    index = similarities.SparseMatrixSimilarity(tfidf[corpus], num_features = feature_cnt)
+
+    print("words", words)
+    sim = index[tfidf[query_vector]]
+    
+    """
+    vectorizer = TfidfVectorizer()
+    tfidf_1 = vectorizer.fit_transform(words)
+    words = vectorizer.get_feature_names()
+    similarity_matrix = cosine_similarity(tfidf_1)
+    print(similarity_matrix)
+    """
+
+    return sim
+    #res = pd.read_csv("results.csv", sep=";")
+    #print(res[abstract_score])
+    #corr, _ = kendalltau(sim, res[abstract_score])
+    #print('Kendall Rank correlation: %.5f' % corr)
+
+    """
+    for i in range(len(sim)):
+        print('keyword is similar to text%d: %.2f' % (i + 1, sim[i]))
+    """
+def document_similarty (query, file_name, abstract , title):
+    df = pd.read_csv(file_name+".csv", sep=";")
+    if abstract :
+        abstract_list  = df['abstract'].tolist()
+        abstract_list = [str(item) for item in abstract_list]
+        abs_sim = Similarity(query,abstract_list)
+        df['abstract_sim']= abs_sim
+    if title :
+        title_list = df['title'].tolist()
+        title_list = [str(item) for item in title_list]
+
+        title_sim = Similarity(query, title_list)
+        df['title_sim']= title_sim
+    df.to_csv('Articles_info_with_similarty.csv', index=False, sep=";")
+
+store_retrieved_articles(query_1)
+store_duplication('Articles_info')
+document_similarty(query_1,'Articles_info',abstract = True, title = True )
