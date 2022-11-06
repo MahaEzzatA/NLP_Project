@@ -230,7 +230,129 @@ def document_similarty (query, file_name, abstract , title):
         title_sim = Similarity(query, title_list)
         df['title_sim']= title_sim
     df.to_csv('Articles_info_with_similarty.csv', index=False, sep=";")
+    
+#to load GLove pre-trained model
+def load_glove_vector():
+    #create a dictionary holding each word and its respective vector
+    #glove
+    embeddings_index = {}
+    with io.open('glove.6B.300d.txt', encoding='utf8') as f:
+      for line in f:
+          values = line.split()
+          word = values[0]
+          coefs = np.asarray(values[1:], dtype='float32')
+          embeddings_index[word] = coefs
+
+      f.close()
+      return embeddings_index[]
+
+print('Found %s word vectors.' % len(embeddings_index))
+
+def load_glove():
+    embeddings_index = load_glove_vector
+    df = pd.read_csv('Articles_info.csv', sep= ";", on_bad_lines='skip')
+    #documents = [word_tokenize(abs.lower()) for abs in df['abstract'].tolist()]
+    documents = [word_tokenize(abs.lower()) for abs in df['title']]
+
+    print(documents)
+    i = 0
+    for doc in documents:
+      for word in doc:
+        i=i+1
+    print("i =", i)
+
+
+    #MAX_LEN = 50
+    tokenizer_obj = Tokenizer()
+    tokenizer_obj.fit_on_texts(documents)
+
+    word_index = tokenizer_obj.word_index
+    print('number of unique words: ', len(word_index))
+    print('number of unique words: ', word_index)
+
+    #def glove_embedding_vectors():
+
+    num_words = len(word_index) + 1
+    embedding_matrix = np.zeros((num_words,300))
+
+
+    for word, j in word_index.items():
+        if j > num_words:
+            continue
+
+        embedding_vector = embeddings_index.get(word)
+        if embedding_vector is not None:
+            embedding_matrix[j] = embedding_vector
+            if j == 16 :
+              print("word =", word)
+              print("\n")
+              print(embedding_matrix[16])
+            
+    return word_index
+
+def tsne_plot():
+    "Creates and TSNE model and plots it"
+    labels = []
+    tokens = []
+    word_index = load_glove()
+    embeddings_index = load_glove_vector
+
+    for word in word_index:
+        tokens.append(embeddings_index[word])
+        labels.append(word)
+    #print("tokens",tokens)
+    #print("labels",labels)
+    
+    #print(embedding_matrix)
+    tsne_model = TSNE(perplexity=40, n_components=3, init='pca', n_iter=2500, random_state=23)
+    new_values = tsne_model.fit_transform(tokens)
+    #embedding_matrix
+    print(new_values)
+    
+    x = []
+    y = []
+    z= []
+    for value in new_values:
+        x.append(value[0])
+        y.append(value[1])
+        z.append(value[2])
+
+    
+    # Creating figure
+    fig = plt.figure(figsize = (10, 7))
+    ax = plt.axes(projection ="3d")
+    
+    # Creating plot
+    ax.scatter3D(x, y, z, color = "green")
+    #plt.title("simple 3D scatter plot")
+    
+    # show plot
+    #plt.show()
+    
+    plt.figure(figsize=(16, 16)) 
+    #ax.scatter3D(x,y,z)
+    """
+    plt.figure(figsize=(16, 16)) 
+
+    for i in range(len(x)):
+        plt.scatter(x[i],y[i])
+        plt.annotate(labels[i]
+        ,xy=(x[i],y[i]),
+        #xy=(x[i], y[i]),
+        xytext=(5, 2),
+        textcoords='offset points',
+        ha='right',
+        va='bottom'
+        )
+    """                
+    print(len(x))
+    print(len(y))
+    plt.show()
+    print("done1")
+    
 
 store_retrieved_articles(query_1)
 store_duplication('Articles_info')
 document_similarty(query_1,'Articles_info',abstract = True, title = True )
+load_glove()
+tsne_plot()
