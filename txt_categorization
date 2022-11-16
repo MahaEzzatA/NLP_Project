@@ -247,7 +247,7 @@ def load_glove_vector():
       f.close()
       return embeddings_index[]
 
-print('Found %s word vectors.' % len(embeddings_index))
+    print('Found %s word vectors.' % len(embeddings_index))
 
 def load_glove():
     embeddings_index = load_glove_vector
